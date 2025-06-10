@@ -1,4 +1,6 @@
 ###Cerebral Hemorrhage Prediction脑溢血预测
+
+
 ###一、设置GPU
 import tensorflow as tf 
 gpus = tf.config.list_physical_devices("GPU")
@@ -8,7 +10,7 @@ if gpus:
     tf.config.set_visible_devices([gpu0],"GPU")
 
 import matplotlib.pyplot as plt
-import os,PIL,pathlib
+import os , PIL , pathlib
 import    numpy           as np
 import    pandas          as pd
 import    warnings        as sns 
@@ -83,16 +85,99 @@ base_model = keras.applications.MobileNetV2(weights='imagenet', include_top=Fals
 for layer in base_model.layers:
     layer.trainable = True
 x = base_model.output
-x = GlobalAveragePooling2D()(x)
+x = Flatten()(x)
 
-x = Dense(512, activation='relu')(x)
+x = Dense(512, kernel_initializer='he_uniform')(x)
+x = BatchNormalization()(x)
+x = Activation('relu')(x)
+
+x = Dense(16, kernel_initializer='he_uniform')(x)
+x = BatchNormalization()(x)
+x = Activation('relu')(x)
+
+output = Dense(len(class_names), activation='softmax')(x)
+model = Model(inputs=base_model.input, outputs=output)
+
+
 ###四、编译
+optimizer = keras.optimizers.Adam(learning_rate=0.0001)
+model.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
+
 
 ###五、模型训练
+from tensorflow.keras.callbacks import Modelcheckpoint, Callback, earlyStopping, ReduceLROnPlateau, LearningRateScheduler
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+history = model.fit(train_ds,
+                    validation_data=val_ds,
+                    epochs=10)
 
+NO_EPOCHS = 10
+PATIENCE = 5
+VERBOSE = 1
+
+earlystopper = EarlyStopping(monitor='val_loss', patience=PATIENCE, verbose=VERBOSE)
+
+checkpointer = ModelCheckpoint('brain_tumor.h5',
+                               monitor='val_accuracy',
+                               verbose=VERBOSE,
+                               save_best_only=True,
+                               save_weights_only=True)
+
+train_model = model.fit(train_ds,
+                        epochs=NO_EPOCHS,
+                        validation_data=val_ds,
+                        verbose = 1,
+                        callbacks=[earlystopper, checkpointer])
 ###六、模型评估
 #1、Accuracy与Loss可视化
+acc = train_model.history['accuracy']
+val_acc = train_model.history['val_accuracy']
+loss = train_model.history['loss']
+val_loss = train_model.history['val_loss']
+epochs_range = range(len(acc))
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 2, 1)
+
+plt.plot(epochs_range, acc, label='Training Accuracy')
+plt.plot(epochs_range, val_acc, label='Validation Accuracy')
+plt.legend(loc='lower right')
+plt.title('Training and Validation Accuracy')
+
+plt.subplot(1, 2, 2)
+plt.plot(epochs_range, loss, label='Training Loss')
+plt.plot(epochs_range, val_loss, label='Validation Loss')
+plt.legend(loc='upper right')
+plt.title('Training and Validation Loss')
+plt.show()
+
+
 #2、混淆矩阵
+from sklearn.metric import confusion_matrix
+import seaborn as sns
+import pandas as pd
+
+def plot_cm(labels, predictions):
+    conf_numpy = confusion_matrix(labels, predictions)
+    conf_df = pd.DataFrame(conf_numpy, index=class_names ,columns=class_names)
+    figure = plt.figure(figsize=(8, 7))
+    sns.heatmap(conf_df, annot=True,cmap="BuPu", fmt='d')
+    plt.title('混淆矩阵',fontsize=15)
+    plt.ylabel('真实值',fontsize=14)
+    plt.xlabel('预测值',fontsize=14)
+
+val_pre =[]
+val_label = []
+for images, labels in val_ds:
+    for image, label in zip(images, labels):
+        img_array = tf.expand_dims(image, 0)
+        predictions = model.predict(img_array)
+
+        val_pre.append(class_names[np.argmax(predictions)])
+        val_label.append(class_names[label])
+plot_cm(val_label, val_pre)
+
 #3、各项指标评估
 from sklearn import metrics
 def test_accuracy_report(model):
@@ -101,5 +186,4 @@ def test_accuracy_report(model):
     print('Loss function: %s, accuracy:' % score[0], score[1])
 
 test_accuracy_report(model)
-
 
