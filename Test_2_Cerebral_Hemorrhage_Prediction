@@ -1,0 +1,105 @@
+###Cerebral Hemorrhage Prediction脑溢血预测
+###一、设置GPU
+import tensorflow as tf 
+gpus = tf.config.list_physical_devices("GPU")
+if gpus:
+    gpu0 = gpu[0]
+    tf.config.experiment.set_memory_growth(gpu0,true)
+    tf.config.set_visible_devices([gpu0],"GPU")
+
+import matplotlib.pyplot as plt
+import os,PIL,pathlib
+import    numpy           as np
+import    pandas          as pd
+import    warnings        as sns 
+from tensorflow import keras
+
+
+plt.rcParams['font.sans-serif']= ['SimHei'] #
+plt.rcParams['axes.unicode_minus'] = False #
+
+###二、导入数据
+#1、导入数据
+import pathlib
+data_dir = pathlib.Path("C:/Users/86158/Desktop/糖尿病预测分析/糖尿病预测分析/dataset")
+image_count = len(list(data_dir.glob('*/*.jpg')))
+print("图片总数为：",image_count)
+
+batch_size = 16
+img_height = 224
+img_width = 224
+
+train_ds = tf.keras.utils.image_dataset_from_directory(
+  data_dir,
+  validation_split=0.2,
+  subset="training",
+  seed=12,
+  image_size=(img_height, img_width),
+  batch_size=batch_size)
+
+#2、数据检查
+for image_batch, labels_batch in train_ds:
+    print(image_batch.shape)
+    print(labels_batch.shape)
+    break
+
+#3、配置数据集
+AUTOTUNE = tf.data.AUTOTUNE
+def train_processing(image,label):
+    image = tf.cast(image/255.0,tf.float32)
+    return image,label
+
+train_ds = (
+    train_ds
+    .map(train_processing,num_parallel_calls=AUTOTUNE)
+    .prefetch(buffer_size=AUTOTUNE)
+)
+
+val_ds = (
+    val_ds.cache()
+    .map(train_processing,num_parallel_calls=AUTOTUNE)
+    .prefetch(buffer_size=AUTOTUNE)
+)
+#4、数据可视化
+plt.figure(figsize=(10, 10))
+plt.subtitle("数据展示")
+
+for images, labels in train_ds.take(1):
+    for i in range(15):
+        plt.subplot(4, 5, i + 1)
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+
+        plt.imshow(images[i])
+        plt.xlabel(class_names[labels[i]-1])
+###三、构建模型
+from tensorflow.keras import layers, models, imput
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPool2D, BatchNormalization, GlobalAveragePooling2D
+
+base_model = keras.applications.MobileNetV2(weights='imagenet', include_top=False) 
+
+for layer in base_model.layers:
+    layer.trainable = True
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+
+x = Dense(512, activation='relu')(x)
+###四、编译
+
+###五、模型训练
+
+###六、模型评估
+#1、Accuracy与Loss可视化
+#2、混淆矩阵
+#3、各项指标评估
+from sklearn import metrics
+def test_accuracy_report(model):
+    print(metric.classification_report(val_label, val_pre, target_names=class_names))
+    score = model.evaluate(val_ds, verbose=0)
+    print('Loss function: %s, accuracy:' % score[0], score[1])
+
+test_accuracy_report(model)
+
+
